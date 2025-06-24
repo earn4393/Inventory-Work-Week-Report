@@ -5,7 +5,7 @@
 *& START-OF-SELECTION
 *&---------------------------------------------------------------------*
 START-OF-SELECTION.
-
+* เตรียมข้อมูล
   IF P_WEEKS = 'X' AND S_WEEK[] IS NOT INITIAL.
      REFRESH S_WEEK.
   ELSEIF S_WEEK[] is INITIAL AND P_WEEKS = ' '.
@@ -30,7 +30,7 @@ START-OF-SELECTION.
 *& END-OF-SELECTION
 *&---------------------------------------------------------------------*
 END-OF-SELECTION.
-
+* ALV และดาวน์โหลด
   PERFORM PROCESS_DATA CHANGING GV_SUBRC.
   IF GV_SUBRC EQ 0.
     PERFORM DISPLAY_DATA.
