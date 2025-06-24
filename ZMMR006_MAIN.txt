@@ -1,0 +1,39 @@
+*&---------------------------------------------------------------------*
+*&  Include           ZMMR006_MAIN
+*&---------------------------------------------------------------------*
+*&---------------------------------------------------------------------*
+*& START-OF-SELECTION
+*&---------------------------------------------------------------------*
+START-OF-SELECTION.
+
+  IF P_WEEKS = 'X' AND S_WEEK[] IS NOT INITIAL.
+     REFRESH S_WEEK.
+  ELSEIF S_WEEK[] is INITIAL AND P_WEEKS = ' '.
+     P_DATE = SY-DATUM - 6.
+    PERFORM GET_WEEK USING P_DATE CHANGING P_WEEK.
+    CONCATENATE 'W' P_WEEK+4(2) INTO WEEK.
+    RANGE_COLLECT S_WEEK 'I' 'EQ' WEEK SPACE.
+  ENDIF.
+
+  PERFORM CHECK_AUTH.
+  PERFORM SET_GLOBAL.
+  PERFORM GET_DATA CHANGING GV_SUBRC.
+  IF GV_SUBRC <> 0.
+    IF GV_SUBRC EQ 9.
+      MESSAGE I000 WITH 'Process already existed!'.
+    ELSE.
+      MESSAGE I000 WITH 'No data selected.'.
+    ENDIF.
+  ENDIF.
+
+*&---------------------------------------------------------------------*
+*& END-OF-SELECTION
+*&---------------------------------------------------------------------*
+END-OF-SELECTION.
+
+  PERFORM PROCESS_DATA CHANGING GV_SUBRC.
+  IF GV_SUBRC EQ 0.
+    PERFORM DISPLAY_DATA.
+  ELSE.
+    MESSAGE I000(38) WITH 'No Data Found!!'.
+  ENDIF.

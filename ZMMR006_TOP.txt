@@ -1,0 +1,223 @@
+*&---------------------------------------------------------------------*
+*&  Include           ZMMR006_TOP
+*&---------------------------------------------------------------------*
+*&---------------------------------------------------------------------*
+*& TABLES
+*&---------------------------------------------------------------------*
+TABLES: SSCRFIELDS,ZTINVENTORY_CUBE,T001W.
+
+
+*&---------------------------------------------------------------------*
+*& TYPE-POOL
+*&---------------------------------------------------------------------*
+TYPE-POOLS: SLIS,
+            ABAP,
+            VRM,
+            ICON,
+            OLE2,
+            TRUXS.
+*&---------------------------------------------------------------------*
+*& TYPE
+*&---------------------------------------------------------------------*
+TYPES: BEGIN OF TY_OUTPUT,
+        ZWEEK TYPE ZTINVENTORY_CUBE-ZWEEK,
+        MATNR   TYPE ZTINVENTORY_CUBE-MATNR,
+        MAKTX   TYPE MAKT-MAKTX,
+        ZCUST   TYPE ZTINVENTORY_CUBE-ZCUST,
+        WERKS   TYPE ZTINVENTORY_CUBE-WERKS,
+        LGORT   TYPE ZTINVENTORY_CUBE-LGORT,
+        CHARG   TYPE ZTINVENTORY_CUBE-CHARG,
+        MTART   TYPE ZTINVENTORY_CUBE-MTART,
+        MENGE   TYPE ZTINVENTORY_CUBE-MENGE,
+        MEINS   TYPE ZTINVENTORY_CUBE-MEINS,
+        TCOST   TYPE ZTINVENTORY_CUBE-TCOST,
+        WAERS   TYPE ZTINVENTORY_CUBE-WAERS,
+        LWEDT   TYPE ZTINVENTORY_CUBE-LWEDT,
+        NDAYS   TYPE ZTINVENTORY_CUBE-NDAYS,
+        STYPE   TYPE ZTINVENTORY_CUBE-STYPE,
+        SGTXT   TYPE ZTINVENTORY_CUBE-SGTXT,
+        EBELN   TYPE ZTINVENTORY_CUBE-EBELN,
+        EKNAM   TYPE ZTINVENTORY_CUBE-EKNAM,
+        NAME1   TYPE ZTINVENTORY_CUBE-NAME1,
+        VENDM   TYPE ZTINVENTORY_CUBE-VENDM,
+        BWTAR   TYPE ZTINVENTORY_CUBE-BWTAR,
+        LGPLA   TYPE ZTINVENTORY_CUBE-LGPLA,
+        SOBKZ   TYPE ZTINVENTORY_CUBE-SOBKZ,
+        IDATE   TYPE ZTINVENTORY_CUBE-IDATE,
+        ITIME   TYPE ZTINVENTORY_CUBE-ITIME,
+      END OF TY_OUTPUT.
+*&---------------------------------------------------------------------*
+*& TABLE
+*&---------------------------------------------------------------------*
+*Output Table\
+DATA : GT_OUTPUT TYPE TABLE OF TY_OUTPUT.
+
+*&---------------------------------------------------------------------*
+*& WORK AREA
+*&---------------------------------------------------------------------*
+DATA: GW_OUTPUT TYPE TY_OUTPUT.
+
+*----------------------------------------------------------------------*
+*GLOBAL VARIABLE                                                       *
+*----------------------------------------------------------------------*
+DATA: GV_REPID    LIKE SY-REPID,
+      GV_SUBRC    LIKE SY-SUBRC,
+      GV_BUT_ACT  TYPE CHAR5.
+DATA: D_BUTT1(4),
+      DATETXT(8).
+
+DATA : P_DATE TYPE  D,
+       P_WEEK  TYPE SCAL-WEEK,
+       WEEK TYPE ZTINVENTORY_CUBE-ZWEEK.
+
+
+*----------------------------------------------------------------------*
+*RANGES
+*----------------------------------------------------------------------*
+*RANGES: R_NRACCT FOR GLPCA-RACCT,
+*        R_IDLRACCT FOR GLPCA-RACCT,
+*        R_DLRACCT FOR GLPCA-RACCT.
+*----------------------------------------------------------------------*
+*CONSTANTS
+*----------------------------------------------------------------------*
+CONSTANTS: GC_TOP_OF_PAGE   TYPE SLIS_FORMNAME VALUE 'TOP_OF_PAGE',
+           GC_END_OF_LIST   TYPE SLIS_FORMNAME VALUE 'END_OF_LIST',
+           GC_PF_STATUS_SET TYPE SLIS_FORMNAME VALUE 'PF_STATUS_SET',
+           GC_USER_COMMAND  TYPE SLIS_FORMNAME VALUE 'USER_COMMAND',
+           GC_SUBTOTAL_TEXT TYPE SLIS_FORMNAME VALUE 'SUBTOTAL_TEXT',
+           GC_FORMNAME      TYPE TDSFNAME VALUE 'ZSDXXF0590'.
+*----------------------------------------------------------------------*
+*FIELD SYMBOL
+*----------------------------------------------------------------------*
+FIELD-SYMBOLS: <L_OUTPUT>  TYPE TABLE,
+*               <LFS_DATA> TYPE ZSTPP_STPOX_ALV,
+               <L_LINE>    TYPE ANY,
+               <L_FIELD>   TYPE ANY.
+
+FIELD-SYMBOLS: <GFST_OUT> TYPE TABLE.
+FIELD-SYMBOLS: <GT_DATA>             TYPE ANY TABLE,
+               <GT_DATA_LINE>        TYPE ANY TABLE,
+               <GW_DATA>             TYPE ANY.
+
+DATA: GR_DATA               TYPE REF TO DATA,
+      GR_DATA_LINE          TYPE REF TO DATA,
+
+      GR_DATA_DESCR         TYPE REF TO CL_ABAP_DATADESCR,
+      GR_DATA_LINE_DESCR    TYPE REF TO CL_ABAP_DATADESCR.
+
+*----------------------------------------------------------------------*
+* ALV
+*----------------------------------------------------------------------*
+
+DATA: GT_FIELDCAT TYPE LVC_T_FCAT,
+      GT_SORT     TYPE LVC_T_SORT ,
+      GW_SORT     TYPE LVC_S_SORT ,
+      GT_FILTER   TYPE  LVC_T_FILT,
+      GW_FILTER   TYPE  LVC_S_FILT,
+      GT_EVENTS   TYPE SLIS_T_EVENT , "WITH HEADER LINE,
+      GT_EXCLUDE  TYPE UI_FUNCTIONS,
+      GT_LIST_TOP TYPE SLIS_T_LISTHEADER WITH HEADER LINE,
+      GW_FIELDCAT TYPE LVC_S_FCAT,
+      GW_LAYOUT   TYPE LVC_S_LAYO,
+      GW_VARIANT  TYPE DISVARIANT,
+      G_SAVE      TYPE C VALUE 'X',
+      G_EXIT      TYPE C,
+      GV_INDEX    TYPE SY-INDEX,
+      GV_FILE     TYPE RLGRAP-FILENAME.
+
+DATA: NEW_TABLE TYPE REF TO DATA,
+      NEW_LINE  TYPE REF TO DATA.
+DATA: LR_TABDESCR TYPE REF TO CL_ABAP_STRUCTDESCR,
+      LR_DATA     TYPE REF TO DATA,
+      LT_DFIES    TYPE DDFIELDS,
+      LW_DFIES    TYPE DFIES.
+
+*&---------------------------------------------------------------------*
+*& DEFINITION
+*&---------------------------------------------------------------------*
+DEFINE RANGE_COLLECT.
+  &1-SIGN = &2.
+  &1-OPTION = &3.
+  &1-LOW = &4.
+  &1-HIGH = &5.
+  APPEND &1.
+END-OF-DEFINITION.
+DEFINE SET_FIELDNAME.
+  GW_FIELDCAT-REPTEXT = GW_FIELDCAT-SCRTEXT_S = GW_FIELDCAT-SCRTEXT_M = GW_FIELDCAT-SCRTEXT_L = &1.
+END-OF-DEFINITION.
+DEFINE RANGE_FIELD.
+  &1-FIELD = &2.
+  &1-FIELD_TEXT = &3.
+  &1-REFFIELD = &5.
+  &1-REFTABLE = &6.
+  &1-HIDE = &7.
+  APPEND &1 TO &4.
+END-OF-DEFINITION.
+*&---------------------------------------------------------------------*
+*& SELECTION-SCREEN
+*&---------------------------------------------------------------------*
+"Selection Screen
+SELECTION-SCREEN BEGIN OF BLOCK DSEL  WITH FRAME TITLE TEXT-B01.
+SELECT-OPTIONS: S_WEEK FOR ZTINVENTORY_CUBE-ZWEEK .
+SELECT-OPTIONS: S_WERKS FOR T001W-WERKS .
+PARAMETERS: P_WEEKS AS CHECKBOX.
+SELECTION-SCREEN END   OF BLOCK DSEL.
+
+SELECTION-SCREEN BEGIN OF BLOCK BL1 WITH FRAME TITLE TEXT-B02.
+PARAMETERS: P_DOWN AS CHECKBOX DEFAULT ' '.
+SELECTION-SCREEN BEGIN OF LINE.
+PARAMETERS: P_R1 RADIOBUTTON GROUP GR1 DEFAULT 'X' USER-COMMAND USC.
+SELECTION-SCREEN COMMENT 3(10) TEXT51.
+PARAMETERS: P_FILE1     LIKE RLGRAP-FILENAME .
+SELECTION-SCREEN END OF LINE.
+SELECTION-SCREEN BEGIN OF LINE.
+PARAMETERS: P_R2 RADIOBUTTON GROUP GR1.
+SELECTION-SCREEN COMMENT 3(10) TEXT52.
+PARAMETERS: P_FILE2  LIKE RLGRAP-FILENAME.
+SELECTION-SCREEN END OF LINE.
+SELECTION-SCREEN END OF BLOCK BL1.
+PARAMETERS: VARIANT LIKE DISVARIANT-VARIANT NO-DISPLAY.
+*&---------------------------------------------------------------------*
+*&  INITIALIZATION                                                *
+*&---------------------------------------------------------------------*
+INITIALIZATION.
+
+  TEXT51 = 'Local Path'.
+  TEXT52 = 'UNIX Path'.
+
+  CONCATENATE '/sapmnt/' SY-SYSID '/global/TXT/' INTO P_FILE2.
+  CONDENSE P_FILE2 NO-GAPS.
+
+AT SELECTION-SCREEN.
+
+AT SELECTION-SCREEN ON VALUE-REQUEST FOR P_FILE1.
+  CALL FUNCTION 'KD_GET_FILENAME_ON_F4'
+    EXPORTING
+      MASK      = ',*.txt,*.*'
+      STATIC    = 'X'
+    CHANGING
+      FILE_NAME = P_FILE1.
+
+AT SELECTION-SCREEN OUTPUT.
+  LOOP AT SCREEN.
+    IF ( P_R1 EQ ' ' AND SCREEN-NAME EQ 'P_FILE1' ) OR
+       ( P_R2 EQ ' ' AND SCREEN-NAME EQ 'P_FILE2' ).
+      SCREEN-INPUT = '0'.
+      MODIFY SCREEN.
+    ENDIF.
+  ENDLOOP.
+
+  IF P_R1 EQ 'X'.
+    SET CURSOR FIELD 'P_FILE1'.
+  ENDIF.
+  IF P_R2 EQ 'X'.
+    SET CURSOR FIELD 'P_FILE2'.
+  ENDIF.
+
+  IF P_DOWN = 'X'.
+    IF P_FILE2 IS INITIAL.
+      MESSAGE E001 WITH 'Please specify file path!'.
+    ELSEIF P_FILE2 = '/usr/sap/svidata/'.
+      MESSAGE E001 WITH 'Please specify file path!'.
+    ENDIF.
+  ENDIF.

@@ -1,0 +1,440 @@
+*&---------------------------------------------------------------------*
+*&  Include           ZMMR006_F01
+*&---------------------------------------------------------------------*
+*&---------------------------------------------------------------------*
+*&      Form  CHECK_AUTH
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM CHECK_AUTH .
+
+ENDFORM.                    " CHECK_AUTH
+*&---------------------------------------------------------------------*
+*&      Form  SET_GLOBAL
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM SET_GLOBAL .
+  GV_REPID = SY-REPID.
+ENDFORM.                    " SET_GLOBAL
+*&---------------------------------------------------------------------*
+*&      Form  GET_DATA
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*      <--P_GV_SUBRC  text
+*----------------------------------------------------------------------*
+FORM GET_DATA  CHANGING P_GV_SUBRC.
+
+  SELECT *
+    FROM ZTINVENTORY_CUBE
+    INNER JOIN MAKT ON MAKT~MATNR = ZTINVENTORY_CUBE~MATNR
+    INTO CORRESPONDING FIELDS OF TABLE GT_OUTPUT
+    WHERE  ZWEEK IN S_WEEK
+    AND WERKS IN S_WERKS
+    AND MAKT~SPRAS = 'EN'.
+
+
+ENDFORM.                    " GET_DATA
+*&---------------------------------------------------------------------*
+*&      Form  PROCESS_DATA
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*      <--P_GV_SUBRC  text
+*----------------------------------------------------------------------*
+FORM PROCESS_DATA  CHANGING P_GV_SUBRC.
+
+ENDFORM.                    " PROCESS_DATA
+*&---------------------------------------------------------------------*
+*&      Form  DISPLAY_DATA
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM DISPLAY_DATA .
+
+  PERFORM SET_FIELDCAT.
+  PERFORM BUILD_EVENTTAB .
+  PERFORM SET_LAYOUT.
+  PERFORM DISPLAY_ALV.
+
+  IF GT_OUTPUT[] IS NOT INITIAL AND P_DOWN IS NOT INITIAL.
+
+    PERFORM DOWNLOAD_FILE.
+
+  ENDIF.
+
+ENDFORM.                    " DISPLAY_DATA
+*&---------------------------------------------------------------------*
+*&      Form  SET_FIELDCAT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM SET_FIELDCAT .
+  DATA: LT_TAB       TYPE CL_ABAP_STRUCTDESCR=>COMPONENT_TABLE,
+            LT_TOTAL_TAB TYPE CL_ABAP_STRUCTDESCR=>COMPONENT_TABLE.
+
+  DATA: LO_NEW_TAB  TYPE REF TO CL_ABAP_TABLEDESCR,
+        LO_NEW_TYPE TYPE REF TO CL_ABAP_STRUCTDESCR,
+        LO_DATA     TYPE REF TO DATA.
+
+  DATA: LR_TABDESCR TYPE REF TO CL_ABAP_STRUCTDESCR,
+        LR_DATA     TYPE REF TO DATA,
+        LT_DFIES    TYPE DDFIELDS,
+        LW_DFIES    TYPE DFIES,
+*        lw_fieldcat TYPE slis_fieldcat_alv.
+        LW_FIELDCAT TYPE LVC_S_FCAT,
+        LV_FLAG TYPE CHAR1.
+
+  PERFORM PREPARE_OO_FIELDCAT TABLES LT_TAB
+                          USING GW_OUTPUT.
+
+  APPEND LINES OF LT_TAB TO LT_TOTAL_TAB.
+
+
+  LO_NEW_TYPE = CL_ABAP_STRUCTDESCR=>CREATE(
+                  P_COMPONENTS = LT_TOTAL_TAB
+                  P_STRICT     = CL_ABAP_STRUCTDESCR=>FALSE ).
+
+  LO_NEW_TAB = CL_ABAP_TABLEDESCR=>CREATE( P_LINE_TYPE  = LO_NEW_TYPE
+                                           P_TABLE_KIND = CL_ABAP_TABLEDESCR=>TABLEKIND_STD
+                                           P_UNIQUE     = ABAP_FALSE ).
+
+  CREATE DATA LO_DATA TYPE HANDLE LO_NEW_TAB.
+*  ASSIGN lo_data->* TO <gfst_out>.
+  ASSIGN LO_DATA->* TO <GFST_OUT>.
+  CREATE DATA LR_DATA LIKE LINE OF <GFST_OUT>.
+  ASSIGN LR_DATA->* TO <L_LINE>.
+
+  LR_TABDESCR ?= CL_ABAP_STRUCTDESCR=>DESCRIBE_BY_DATA_REF( LR_DATA ).
+  LT_DFIES = CL_SALV_DATA_DESCR=>READ_STRUCTDESCR( LR_TABDESCR ).
+
+
+  FIELD-SYMBOLS: <FS_DFIES> LIKE LINE OF LT_DFIES.
+  REFRESH GT_FIELDCAT.
+  LOOP AT LT_DFIES ASSIGNING <FS_DFIES>.
+    CLEAR: GW_FIELDCAT,LV_FLAG.
+
+    MOVE-CORRESPONDING <FS_DFIES> TO GW_FIELDCAT.
+
+    PERFORM SET_FIELDNAME.
+*    PERFORM set_no_out.
+*    PERFORM set_skip CHANGING lv_flag.
+*    IF lv_flag EQ 'X'.
+*      CONTINUE.
+*    ENDIF.
+
+    GW_FIELDCAT-TABNAME = '<GFST_OUT>'.
+    APPEND GW_FIELDCAT TO GT_FIELDCAT.
+  ENDLOOP.
+ENDFORM.                    " SET_FIELDCAT
+*&---------------------------------------------------------------------*
+*&      Form  PREPARE_OO_FIELDCAT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*      -->P_LT_TAB  text
+*      -->P_GW_SUMMARY  text
+*----------------------------------------------------------------------*
+FORM PREPARE_OO_FIELDCAT  TABLES   PT_TAB
+                         USING    PW_OUT.
+
+  DATA: LO_STRUCT   TYPE REF TO CL_ABAP_STRUCTDESCR.
+
+  LO_STRUCT ?= CL_ABAP_TYPEDESCR=>DESCRIBE_BY_DATA( PW_OUT ).
+  PT_TAB[]  = LO_STRUCT->GET_COMPONENTS( ).
+
+ENDFORM.                    " PREPARE_OO_FIELDCAT
+*&---------------------------------------------------------------------*
+*& Form  BUILD_EVENTTAB
+*&---------------------------------------------------------------------*
+FORM BUILD_EVENTTAB.
+
+  DATA: LS_EVENT TYPE SLIS_ALV_EVENT.
+
+  CALL FUNCTION 'REUSE_ALV_EVENTS_GET'
+    EXPORTING
+      I_LIST_TYPE = 0
+    IMPORTING
+      ET_EVENTS   = GT_EVENTS.
+
+* Event - User_Command
+  READ TABLE GT_EVENTS WITH KEY NAME =  SLIS_EV_USER_COMMAND
+                       INTO LS_EVENT.
+  IF SY-SUBRC = 0.
+    MOVE GC_USER_COMMAND TO LS_EVENT-FORM.
+    APPEND LS_EVENT TO GT_EVENTS.
+  ENDIF.
+
+ENDFORM.                    "build_eventtab
+
+*&---------------------------------------------------------------------*
+*&      Form  BUILD_SORTINFO
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM BUILD_SORTINFO .
+
+ENDFORM.                    " BUILD_SORTINFO
+*&---------------------------------------------------------------------*
+*&      Form  SET_LAYOUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM SET_LAYOUT .
+  GW_LAYOUT-CWIDTH_OPT = 'X'.
+  GW_LAYOUT-ZEBRA = 'X'.
+  GW_LAYOUT-INFO_FNAME    = 'LINE_COLOR'.
+ENDFORM.                    " SET_LAYOUT
+*&---------------------------------------------------------------------*
+*&      Form  DISPLAY_ALV
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM DISPLAY_ALV.
+
+  DATA: IT_SORT_LVC TYPE  LVC_T_SORT,
+        LW_SORT_LVC TYPE LVC_S_SORT.
+
+  GW_VARIANT-VARIANT = VARIANT.
+  CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY_LVC'
+    EXPORTING
+      I_CALLBACK_PROGRAM       = GV_REPID
+      IS_LAYOUT_LVC            = GW_LAYOUT
+      IT_FIELDCAT_LVC          = GT_FIELDCAT
+      IT_SORT_LVC              = IT_SORT_LVC
+      I_CALLBACK_PF_STATUS_SET = GC_PF_STATUS_SET
+      I_SAVE                   = 'A'
+      IS_VARIANT               = GW_VARIANT
+      IT_EVENTS                = GT_EVENTS[]
+    TABLES
+      T_OUTTAB                 = GT_OUTPUT "<gfst_out>
+    EXCEPTIONS
+      PROGRAM_ERROR            = 1
+      OTHERS                   = 2.
+  IF SY-SUBRC <> 0.
+*MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
+*       WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
+  ENDIF.
+
+
+ENDFORM.                    " DISPLAY_ALV                 "pf_status_set
+*&---------------------------------------------------------------------*
+*& Form  PF_STATUS_SET
+*&---------------------------------------------------------------------*
+FORM PF_STATUS_SET USING LPT_EXTAB TYPE SLIS_T_EXTAB.
+  DATA : LS_EXTAB TYPE LINE OF SLIS_T_EXTAB.
+  SET PF-STATUS 'STANDARD'." EXCLUDING lpt_extab.
+ENDFORM.                    "pf_status_set
+*&---------------------------------------------------------------------*
+*& Form  USER_COMMAND
+*&---------------------------------------------------------------------*
+FORM USER_COMMAND USING R_UCOMM     TYPE SY-UCOMM
+                        RS_SELFIELD TYPE SLIS_SELFIELD.
+  DATA: GD_REPID LIKE SY-REPID, "Exists
+  REF_GRID TYPE REF TO CL_GUI_ALV_GRID.
+  IF REF_GRID IS INITIAL.
+    CALL FUNCTION 'GET_GLOBALS_FROM_SLVC_FULLSCR'
+      IMPORTING
+        E_GRID = REF_GRID.
+  ENDIF.
+  IF NOT REF_GRID IS INITIAL.
+    CALL METHOD REF_GRID->CHECK_CHANGED_DATA .
+  ENDIF.
+*  RS_SELFIELD-REFRESH = ABAP_TRUE.  " refresh ALV list !!!
+*  CASE R_UCOMM.
+*    WHEN 'ZDOWN'.
+**      PERFORM download_excel.
+*  ENDCASE.
+ENDFORM.                    "user_command
+*&---------------------------------------------------------------------*
+*&      Form  DOWNLOAD_FILE
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM DOWNLOAD_FILE .
+
+  FIELD-SYMBOLS: <LFS_FIELD> TYPE ANY.
+  DATA: LV_COUNT TYPE I,
+        LV_FIELD TYPE STRING,
+        LV_N TYPE CHAR50,
+        LV_N_I TYPE CHAR50,
+        LV_N_S TYPE CHAR1,
+        LT_DATA1 TYPE TABLE OF TY_OUTPUT,
+        LW_DATA1 TYPE TY_OUTPUT,
+        LT_DATA2 TYPE TABLE OF TY_OUTPUT,
+        LW_DATA2 TYPE TY_OUTPUT,
+        FILE_NAME LIKE RLGRAP-FILENAME.
+
+  DATA: BEGIN OF SIMPLE2LIMS OCCURS 0,
+          W(2000),
+        END OF SIMPLE2LIMS.
+  DATA: BEGIN OF SIMPLE2LIMS_H OCCURS 0,
+         W(2000),
+        END OF SIMPLE2LIMS_H.
+  CONSTANTS: DELIM TYPE C VALUE '|'.
+
+  LOOP AT GT_FIELDCAT INTO GW_FIELDCAT WHERE NO_OUT IS INITIAL.
+    CONCATENATE SIMPLE2LIMS_H  GW_FIELDCAT-SCRTEXT_M  DELIM
+    INTO SIMPLE2LIMS_H.
+  ENDLOOP.
+
+  APPEND SIMPLE2LIMS_H.
+  CLEAR: SIMPLE2LIMS_H.
+
+  LT_DATA1[] = GT_OUTPUT[].
+  SORT LT_DATA1 BY ZWEEK.
+  DELETE ADJACENT DUPLICATES FROM LT_DATA1 COMPARING ZWEEK.
+
+  LOOP AT LT_DATA1 INTO LW_DATA1.
+    CLEAR: SIMPLE2LIMS.
+    LT_DATA2[] = GT_OUTPUT[].
+    DELETE LT_DATA2 WHERE ZWEEK NE LW_DATA1-ZWEEK.
+
+    APPEND LINES OF SIMPLE2LIMS_H TO SIMPLE2LIMS.
+
+    LOOP AT LT_DATA2 INTO LW_DATA2 ."where status = icon_green_light.
+      CLEAR: GW_FIELDCAT.
+      LOOP AT GT_FIELDCAT INTO GW_FIELDCAT.
+
+        CLEAR: LV_FIELD.
+        LV_FIELD = GW_FIELDCAT-FIELDNAME.
+        ASSIGN COMPONENT LV_FIELD OF STRUCTURE LW_DATA2 TO <LFS_FIELD>.
+        IF SY-SUBRC = 0 AND <LFS_FIELD> IS ASSIGNED.
+          IF GW_FIELDCAT-INTTYPE EQ 'P' OR GW_FIELDCAT-INTTYPE EQ 'N' OR GW_FIELDCAT-INTTYPE EQ 's'.
+            WRITE <LFS_FIELD> TO LV_N.
+            CONDENSE LV_N.
+            IF LV_N CP'*-*'.
+              SPLIT LV_N AT '-' INTO LV_N_I LV_N_S.
+              CONCATENATE '-' LV_N_I INTO LV_N.
+            ENDIF.
+            CONDENSE LV_N.
+            CONCATENATE SIMPLE2LIMS LV_N DELIM INTO SIMPLE2LIMS.
+          ELSEIF GW_FIELDCAT-INTTYPE EQ 'D'.
+            CONCATENATE SIMPLE2LIMS <LFS_FIELD>+6(2) '/' <LFS_FIELD>+4(2) '/' <LFS_FIELD>+0(4) DELIM INTO SIMPLE2LIMS.
+          ELSEIF GW_FIELDCAT-INTTYPE EQ 'T'.
+            CONCATENATE SIMPLE2LIMS <LFS_FIELD>+0(2) ':' <LFS_FIELD>+2(2) ':' <LFS_FIELD>+4(2) DELIM INTO SIMPLE2LIMS.
+          ELSE.
+            CONCATENATE SIMPLE2LIMS <LFS_FIELD> DELIM INTO SIMPLE2LIMS.
+          ENDIF.
+
+        ENDIF.
+        CLEAR: GW_FIELDCAT.
+      ENDLOOP.
+
+      APPEND SIMPLE2LIMS.
+      CLEAR: SIMPLE2LIMS.
+    ENDLOOP.
+
+    IF P_R1 = 'X'.
+
+      CONCATENATE P_FILE1 'INVENTORY_CUBE.TXT' INTO FILE_NAME.
+
+      CALL FUNCTION 'WS_DOWNLOAD'
+            EXPORTING
+              FILENAME                      = FILE_NAME
+              FILETYPE                      = 'DAT'
+*     IMPORTING
+*       FILELENGTH                    =
+            TABLES
+              DATA_TAB                      = SIMPLE2LIMS
+            EXCEPTIONS
+              FILE_OPEN_ERROR               = 1
+              FILE_WRITE_ERROR              = 2
+              INVALID_FILESIZE              = 3
+              INVALID_TYPE                  = 4
+              NO_BATCH                      = 5
+              UNKNOWN_ERROR                 = 6
+              INVALID_TABLE_WIDTH           = 7
+              GUI_REFUSE_FILETRANSFER       = 8
+              CUSTOMER_ERROR                = 9
+              OTHERS                        = 10
+                    .
+
+      IF SY-SUBRC <> 0.
+        MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
+              WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
+      ELSE.
+        MESSAGE S000 WITH 'Download to local file ' P_FILE1 'successfully!'.
+      ENDIF.
+
+    ELSE.
+
+      CONCATENATE P_FILE2 'INVENTORY_CUBE.TXT' INTO FILE_NAME.
+
+      OPEN DATASET FILE_NAME FOR OUTPUT IN TEXT MODE
+   ENCODING DEFAULT WITH SMART LINEFEED.
+**& End Modified UCCHECK by Adinan Pholchan (SVI) on 2/4/2008
+      IF SY-SUBRC = 0.
+        LOOP AT SIMPLE2LIMS.
+          TRANSFER SIMPLE2LIMS TO FILE_NAME.
+        ENDLOOP.
+        CLOSE DATASET P_FILE2.
+        IF SY-SUBRC = 0.
+          MESSAGE S000 WITH 'Download to file ' FILE_NAME 'successfully!'.
+        ENDIF.
+      ELSE.
+        MESSAGE E000 WITH 'Can not download! Please check File path'.
+      ENDIF.
+    ENDIF.
+
+    CLEAR FILE_NAME.
+
+  ENDLOOP.
+ENDFORM.                    " DOWNLOAD_FILE
+*&---------------------------------------------------------------------*
+*&      Form  GET_WEEK
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*      -->P_P_DATE  text
+*      <--P_P_WEEK  text
+*----------------------------------------------------------------------*
+FORM GET_WEEK  USING    P_P_DATE
+               CHANGING P_P_WEEK.
+  CALL FUNCTION 'DATE_GET_WEEK'
+    EXPORTING
+      DATE = P_DATE
+    IMPORTING
+      WEEK = P_WEEK.
+ENDFORM.                    " GET_WEEK
+*&---------------------------------------------------------------------*
+*&      Form  SET_FIELDNAME
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM SET_FIELDNAME .
+  CASE GW_FIELDCAT-FIELDNAME.
+    WHEN 'NDAYS'.SET_FIELDNAME 'Aging'.
+    WHEN 'MENGE'.SET_FIELDNAME 'Quantity'.
+    WHEN 'TCOST'.SET_FIELDNAME 'Total Valuated Stock'.
+  ENDCASE.
+
+ENDFORM.                    " SET_FIELDNAME
