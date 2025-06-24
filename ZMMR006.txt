@@ -12,6 +12,10 @@ REPORT  ZMMR006 NO STANDARD PAGE HEADING
                                 MESSAGE-ID 38.
 
 
-INCLUDE: ZMMR006_TOP,
+INCLUDE: 
+* ประกาศพารามิเตอร์ , ตัวแปร และหน้า screen
+ZMMR006_TOP,
+* main program
          ZMMR006_MAIN,
+* รวบรวมฟังก์ชันที่มีการเขียนเพิ่มเอาไว้สำหรับใช้ใน main program
          ZMMR006_F01.
